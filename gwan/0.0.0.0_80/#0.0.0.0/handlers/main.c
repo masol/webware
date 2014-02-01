@@ -1,15 +1,11 @@
 // ============================================================================
-// Handler C script for the G-WAN Web Application Server (http://trustleap.ch/)
-// ----------------------------------------------------------------------------
-// main.c: filter IP addresses, rewrite URLs, log custom messages, etc.
-// ----------------------------------------------------------------------------
-// The so_xxxxxx() BSD socket calls, like xbuf_frurl(), are provided by G-WAN 
-// for convenience and are using asynchronous client calls, just like the 
-// connnect() / send() / recv() system calls that you can use directly: G-WAN
-// transparently transforms blocking system calls into asynchronous calls, for
-// C scripts (servlets, handlers) as well as for (shared or static) libraries 
-// linked with C scripts by "#pragma link".
+// This file is part of webware.
+// Published under the Apache License, Version 2.0.
+// Copyright (C) by masol.li@gmail.com.
+//
+// See https://github.com/masol/webhome for more information.
 // ============================================================================
+
 //#pragma debug     // uncomment to get symbols/line numbers in crash reports
 
 #include "gwan.h"   // G-WAN exported functions
@@ -17,17 +13,6 @@
 #include <stdio.h>  // printf()
 #include <string.h> // strcmp()
 
-// ----------------------------------------------------------------------------
-// structure holding pointers for persistence
-// ----------------------------------------------------------------------------
-typedef struct 
-{ 
-   kv_t *kv;   // a Key-Value store
-   char *blah; // a string
-   int   val;  // a counter
-} data_t;
-
-// ----------------------------------------------------------------------------
 // init() will initialize your data structures, load your files, etc.
 // ----------------------------------------------------------------------------
 // init() should return -1 if failure (to allocate memory for example)
