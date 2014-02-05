@@ -7,7 +7,7 @@
 // ============================================================================
 
 // uncomment to get symbols/line numbers in crash reports
-#pragma debug
+// #pragma debug
 
 #include "gwan.h"   // G-WAN exported functions
 #include "webware.h"
@@ -34,10 +34,10 @@ int init(int argc, char *argv[])
   
 
 //  u8 *query_char = (u8*)get_env(argv, QUERY_CHAR);
-//  *query_char = '~'; // we must use "/!helloc.c" instead of "/?helloc.c"
- 
-   
-   
+//  *query_char = '!'; // we use "/!helloc.c" instead of "/?helloc.c"
+
+
+
 
    // define which handler states we want to be notified in main():
    // enum HANDLER_ACT { 
@@ -50,11 +50,11 @@ int init(int argc, char *argv[])
    //  HDL_HTTP_ERRORS,  // when G-WAN is going to reply with an HTTP error
    //  HDL_CLEANUP };
    u32 *states = (u32*)get_env(argv, US_HANDLER_STATES);
-   *states = (1L << HDL_AFTER_ACCEPT)
-       | (1L << HDL_AFTER_READ)
+   *states = (1L << HDL_HTTP_ERRORS);
+/*       | (1L << HDL_AFTER_READ)
 		   | (1L << HDL_BEFORE_PARSE)
 		   | (1L << HDL_AFTER_PARSE)
-		   | (1L << HDL_BEFORE_WRITE);
+		   | (1L << HDL_BEFORE_WRITE);//*/
    
    return 0;
 }
@@ -89,7 +89,7 @@ void clean(int argc, char *argv[])
 #define  MAX_LANG_LEN    8
 typedef  char accept_language_t[MAX_LANG_LEN];
 
-static char* getNextLine(char* s)
+static inline char* getNextLine(char* s)
 {
   while(*s && *s != '\r' &&  *(s+1) != '\n') s++;
   if(*s) s += 2;
@@ -97,6 +97,7 @@ static char* getNextLine(char* s)
 }
 
 #define	 _DEBUG		1
+//#undef _DEBUG
 
 #ifdef	_DEBUG
 static   void  debug_count(int pos)
@@ -114,7 +115,7 @@ static   void  debug_count(int pos)
  * @len: the maximum number of characters to search
  * original from lib/string.c
 */
-char *strnstr(const char *s1, const char *s2, size_t len)
+static char *strnstr(const char *s1, const char *s2, size_t len)
 {
   size_t l2;
 
@@ -132,10 +133,9 @@ char *strnstr(const char *s1, const char *s2, size_t len)
 
 
 /** @brief whether s start with msg(len is msg length).
-@return if s start with msg, return string start from excess of s and remove blank. otherwise return 0l(NULL).
-  IE. 
+ * @return if s start with msg, return string start after msg in s and remove blank. otherwise return 0l(NULL).IE. 
 **/
-char* isStartWith(char *s, char *msg,int len)
+static char* startwith(char *s, char *msg,int len)
 {
    int i = 0;
    for(;i < len;i++)
@@ -144,7 +144,22 @@ char* isStartWith(char *s, char *msg,int len)
    }
    if(i == len)
    {
-      while(*s == ' ') s++;
+      while(*s && *s == ' ') s++;
+      return *s ? s : (char*)0l;
+   }
+   return (char*)0l;
+}
+
+static char* endwith(char *s,char *msg,int len)
+{
+   int i = 0;
+   msg += len;
+   for(;i < len;i++)
+   {
+     if( *s-- != *msg--) break;
+   }
+   if(i == len)
+   {
       return s;
    }
    return (char*)0l;
@@ -153,27 +168,7 @@ char* isStartWith(char *s, char *msg,int len)
 
 int main(int argc, char *argv[])
 {
-   // just helping you to know where you are:
-/*   static char *states[] =
-   {
-      [HDL_INIT]         = "0:init()",      // not seen here: init()
-      [HDL_AFTER_ACCEPT] = "1:AfterAccept",
-      [HDL_AFTER_READ]   = "2:AfterRead",
-      [HDL_BEFORE_PARSE] = "3:BeforeParse",
-      [HDL_AFTER_PARSE]  = "4:AfterParse",
-      [HDL_BEFORE_WRITE] = "5:BeforeWrite",
-      [HDL_AFTER_WRITE]  = "6:AfterWrite",
-      [HDL_HTTP_ERRORS]  = "7:HTTP_Errors",
-      [HDL_CLEANUP]      = "8:clean()",   // not seen here: clean()
-      ""
-   };
-//*/
    long state = (long)argv[0];
-/*   if(state >= 0 && state <= HDL_CLEANUP)
-    printf("Handler state:%ld:%s\n", state, states[state]);
-   else
-    printf("Handler state:%ld\n", state);
-//*/ 
    switch(state)
    {
       // ----------------------------------------------------------------------
@@ -217,21 +212,124 @@ int main(int argc, char *argv[])
       //   2: Send a server reply based on a reply buffer/HTTP status code
       // 255: Continue (read more if request not complete or build reply based
       //                on the client request -or your altered version)
+      //  First, we check first line is a valid HTTP request.
       case HDL_AFTER_READ:
       {
+#if 0
+         //The server rewrite solution is discard. Because xbuf_t of G-Wan is heavily thread-aware.
+	 //I can not operate it just like follow code. read_xbuf is MUTABLE.
+	
          //char *szRequest = (char*)get_env(argv, REQUEST);
          // do something with the request (re-write URL? do it in-place)
          xbuf_t *read_xbuf = (xbuf_t*)get_env(argv, READ_XBUF);
-         char *s = read_xbuf->ptr;
-         char *url_begin; //url_begin point to url in header buffer.
+	 
+#define	 BUFFER_LEN  1024	 
+	 char buffer[BUFFER_LEN];
+	 s32  len = xbuf_getln(read_xbuf,buffer,BUFFER_LEN-1);
+	 if(len < BUFFER_LEN)
+	 {
+	   buffer[len] = 0;
+	   printf("%s\r\n",buffer);
+	   char *s = buffer;
+
+	   //GET /?served_from.c HTTP/1.1
+	   char *url_begin; //url_begin point to url in header buffer.
+	   size_t url_length; //url length in read_xbuf.
+	   int  i; //temp cycle. use it with initialization.
+	  
+	   while(*s && *s != ' ') s++;
+	   while(*s && *s == ' ') s++;
+	   //not a valid http head.
+	   if(!*s) break;
+	  
+	  
+	  url_begin = s;
+	  while(*s && *s != ' ') s++;
+	  url_length = s - url_begin - 1;
+	  
+	  //not a valid http head.
+	  if(!*s) break;
+	  {//Check first line end with ' HTTP/1.1\r\n'
+	    char msg[] = " HTTP/1.1\r\n";
+	    s = startwith(s,msg,sizeof(msg)-1);
+	    //Not a valid HTTP/1.1 head.
+	    if(!s) break;
+	  }
+	  
+	  //Run to here. 's' pointer to next line.
+	  if(url_length == 1 && *url_begin == '/')
+	  {//rewrite root directory.
+	  }else if(url_length > 3 && url_begin[0] == '/' && url_begin[1] == 'd' && url_begin[2] == '/')
+	  {//rewrite chandler.
+	    //we replace first char with '?'. So we can redirect it to csp.
+	    url_begin[3] = '?';
+	    for(i = 4; i < url_length; i++)
+	    {
+	      //Change old '?' to '&' if exist.
+	      if(url_begin[i] == '?')
+	      {
+		url_begin[i]='&';
+		break;
+	      }
+	    }
+	  }else if(url_length > 5 && strnstr(url_begin,".html",url_length))
+	  {//rewrite locale. if this rewrite isn't expect, please use .htm suffix.
+	  }
+	 }
+         
          while(*s && *s != ' ') s++;
          while(*s && *s == ' ') s++;
-         debug_count(10);
-	 if(!*s) debug_count(11);
+         //not a valid http head.
+         if(!*s) break;
+         
          url_begin = s;
+	 while(*s && *s != ' ') s++;
+	 url_length = s - url_begin - 1;
+	 
+	 //not a valid http head.
+	 if(!*s) break;
+	 {//Check first line end with ' HTTP/1.1\r\n'
+	   char msg[] = " HTTP/1.1\r\n";
+	   s = startwith(s,msg,sizeof(msg)-1);
+	   //Not a valid HTTP/1.1 head.
+	   if(!s) break;
+	 }
+	 
+	 debug_count(1 + url_length);
+	 
+	 //Run to here. 's' pointer to next line.
+	 if(url_length == 1 && *url_begin == '/')
+	 {//rewrite root directory.
+	 }
+
+	 debug_count(2);
+	 
+	 if(url_length > 3 && url_begin[0] == '/' && url_begin[1] == 'd' && url_begin[2] == '/')
+	 {//rewrite chandler.
+	   //we replace first char with '?'. So we can redirect it to csp.
+	   url_begin[3] = '?';
+	   for(i = 4; i < url_length; i++)
+	   {
+	     //Change old '?' to '&' if exist.
+	     if(url_begin[i] == '?')
+	     {
+	       url_begin[i]='&';
+	       break;
+	     }
+	   }
+	 }
+	 
+	 debug_count(3);
+
+	 if(url_length > 5 )//&& strnstr(url_begin,".html",url_length))
+	 {//rewrite locale. if this rewrite isn't expect, please use .htm suffix.
+	 }
+	 
+	 printf("\r\n");
+	 
          if(*s++ == '/' && *s++ == 'd' && *s ++ == '/')
          {
-           //we replace first char with '?'. So we can redirect it to csp.
+           
            *s ++ = '?';
            //xbuf_replfrto(read_xbuf, read_xbuf->ptr, read_xbuf->ptr + 16, "/blog", "/?blog");
            //printf("after rewrite:%s",read_xbuf->ptr);
@@ -250,7 +348,7 @@ int main(int argc, char *argv[])
              case 'A': //Accept-Language:
                {
                  char msg[] = "ccept-Language:";
-                 char *a = isStartWith(++s,msg,sizeof(msg) - 1);
+                 char *a = startwith(++s,msg,sizeof(msg) - 1);
                  if(a)
                  {
 		   debug_count(30);
@@ -289,7 +387,7 @@ int main(int argc, char *argv[])
              case 'H': //Host
                {
                  char msg[] = "ost:";
-                 char *host = isStartWith(++s,msg,sizeof(msg) - 1);
+                 char *host = startwith(++s,msg,sizeof(msg) - 1);
                  if(host)
                  {//Lookup hostname from database/kv table?. then rewrite to user-directory.
                  }
@@ -299,7 +397,7 @@ int main(int argc, char *argv[])
              case 'U': //User-Agent
                {
                  char msg[] = "ser-Agent:";
-                 char *agent = isStartWith(++s,msg,sizeof(msg) - 1);
+                 char *agent = startwith(++s,msg,sizeof(msg) - 1);
                  if(agent){
                  #if 0
                    //TESTING: output the agent.
@@ -315,7 +413,7 @@ int main(int argc, char *argv[])
              case 'C': //Cookie
                {
                  char msg[] = "ookie:";
-                 char *cookie = isStartWith(++s,msg,sizeof(msg) - 1);
+                 char *cookie = startwith(++s,msg,sizeof(msg) - 1);
                  if(cookie){
                    char *nextline = getNextLine(cookie) - 2;
                    //We search uls-languages= to find the preferred language. 
@@ -365,6 +463,7 @@ int main(int argc, char *argv[])
            }
          }
          printf("\r\n");
+	 #endif
          #if 0
          printf("after rewrite:%s",read_xbuf->ptr);
          #endif
@@ -398,10 +497,82 @@ int main(int argc, char *argv[])
       // 255: Continue (send a reply based on the request HTTP code)
       case HDL_HTTP_ERRORS:
       {
-         // here we could use our data->log file to log custom events
-         // char string[256];
-         // s_snprintf(string, sizeof(string)-1, "whatever", x,y,z);
-         // fputs(string, data->log);
+        // here we could use our data->log file to log custom events
+        // char string[256];
+        // s_snprintf(string, sizeof(string)-1, "whatever", x,y,z);
+        // fputs(string, data->log);
+	int *pHTTP_status;
+	pHTTP_status = (int*)get_env(argv, HTTP_CODE);
+	if(pHTTP_status && *pHTTP_status == 404) // is it a 404 error?
+	{
+	  u32 mod = 0, len = 0;
+	  http_t *http = (http_t*)get_env(argv, HTTP_HEADERS);
+	  char *request = (char*)get_env(argv, REQUEST);
+	  char *s = request;
+	  size_t url_length = 0;
+	  while(*s++ != ' '); //skip GET
+	  while(*s++ == ' '); //skip ' '
+	  while(*s && *s != ' ' && *s != '\r') s++,url_length++; //skip URL
+	  
+	  //printf("len:%d,s:%s,request:%s",url_length,s,request);
+	  
+	  if(url_length > 5 && endwith(s,".html",5))
+	  {
+	    char *c = cacheget(argv, "index.html", &len, 0, pHTTP_status, &mod, 0);
+	    if(!c)
+	    {
+	      // since we fetch index.html from the cache, make sure that it's there
+	      char str[1024] = {0};
+	      char *wwwpath = (char*)get_env(argv, WWW_ROOT);// get "/www" path
+	      xbuf_t f;      // create a dynamic buffer
+	      xbuf_init(&f); // initialize buffer
+
+	      s_snprintf(str, 1023, "%s/index.html", wwwpath);   // build full path
+	      
+	      xbuf_frfile(&f, str);
+	      if(f.len)
+	      {
+		cacheadd(argv, "index.html", f.ptr, f.len, ".html", 200, 0); // never expire
+		c = cacheget(argv, "index.html", &len, 0, pHTTP_status, &mod, 0);
+		xbuf_free(&f);
+	      }
+	    }
+	    if(c)
+	    {
+	      *pHTTP_status = 200; // setup 200.
+	      char *date = (char*)get_env(argv, SERVER_DATE);
+	      char szmodified[64];
+	      static char buf[] =
+		  "HTTP/1.1 %s\r\n"
+		  "Date: %s\r\n"
+		  "Last-Modified: %s\r\n"
+		  "Content-type: text/html\r\n"
+		  "Content-Length: %u\r\n" // HTML body length
+		  "Connection: keep-alive\r\n\r\n";
+	      build_headers(argv, buf,
+			http_status(*pHTTP_status), // "200 OK" here
+			date,                       // current HTTP time
+			time2rfc(mod, szmodified)  // file HTTP time
+			,len);                       // file length
+	      
+/**	      static const char buf[] =
+		  "HTTP/1.1 %s\r\n"
+		  "Date: %s\r\n"
+		  "Last-Modified: %s\r\n"
+		  "Content-type: text/html\r\n"
+		  "Not-Found: %s\r\n" //Cutome header for cliend process.(We avoid using Referer here).
+		  "Content-Length: %u\r\n" // HTML body length
+		  "Connection: keep-alive\r\n\r\n";
+		  
+	      xbuf_xcat(get_reply(argv), buf,
+			http_status(*pHTTP_status), //"200 OK" here
+			date,time2rfc(mod, szmodified),
+			urlbuf,len);*/
+	      set_reply(argv, c, len, *pHTTP_status); // no copy
+	      return 2; // 2: Send a server reply          */
+	    }
+	  }
+	}
       }
       break;
       // ----------------------------------------------------------------------
