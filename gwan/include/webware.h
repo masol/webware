@@ -6,18 +6,36 @@
 // See https://github.com/masol/webhome for more information.
 // ============================================================================
 
-// #pragma debug     // uncomment to get symbols/line numbers in crash reports
-//
+#ifndef _WEBWARE_H
+#define _WEBWARE_H
+
 #include "gwan.h"   // G-WAN exported functions
 
-#include <stdio.h>  // printf()
-#include <string.h> // strcmp()
+#ifdef __cplusplus
+ extern "C" {
+#endif
+
 
 // ----------------------------------------------------------------------------
-// // structure holding pointers for persistence
+// // structure holding pointers for server wide persistence
 // // ----------------------------------------------------------------------------
-typedef struct
+typedef struct _tag_ww_server_t
 {
    kv_t *kv;   // a Key-Value store
 }ww_server_t;
+
+
+extern const char* getBrowserPrefix(const char *agent);
+extern const char* getLangPrefix(const char *cookie,const char *accept_lang);
+
+
+#ifdef __cplusplus
+ }
+#endif
+
+
+#endif
+// ============================================================================
+// End of Source Code
+// ============================================================================
 
