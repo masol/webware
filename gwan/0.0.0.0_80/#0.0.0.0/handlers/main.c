@@ -50,11 +50,11 @@ int init(int argc, char *argv[])
    //  HDL_HTTP_ERRORS,  // when G-WAN is going to reply with an HTTP error
    //  HDL_CLEANUP };
    u32 *states = (u32*)get_env(argv, US_HANDLER_STATES);
-   *states = (1L << HDL_HTTP_ERRORS);
+   *states = (1L << HDL_HTTP_ERRORS)
+	 | (1L << HDL_BEFORE_WRITE);
 /*       | (1L << HDL_AFTER_READ)
 		   | (1L << HDL_BEFORE_PARSE)
-		   | (1L << HDL_AFTER_PARSE)
-		   | (1L << HDL_BEFORE_WRITE);//*/
+		   | (1L << HDL_AFTER_PARSE);//*/
    
    return 0;
 }
@@ -585,6 +585,11 @@ int main(int argc, char *argv[])
          // char string[256];
          // s_snprintf(string, sizeof(string)-1, "whatever", x,y,z);
          // fputs(string, data->log);
+
+// example:
+static const char header[] = "Powered-by: ANSI C scripts\r\n";
+http_header(HEAD_ADD, header, sizeof(header) - 1, argv);
+	 
       }
       break;
       // ----------------------------------------------------------------------
