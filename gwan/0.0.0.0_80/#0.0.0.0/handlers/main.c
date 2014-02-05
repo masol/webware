@@ -9,11 +9,12 @@
 //#pragma debug     // uncomment to get symbols/line numbers in crash reports
 
 #include "gwan.h"   // G-WAN exported functions
+#include "webware.h"
 
-#include <stdio.h>  // printf()
-#include <string.h> // strcmp()
+#include <stdio.h>   // printf()
+#include <string.h>  // strcmp()
 
-// init() will initialize your data structures, load your files, etc.
+// init() will initialize server-wide data structures, load your files, etc.
 // ----------------------------------------------------------------------------
 // init() should return -1 if failure (to allocate memory for example)
 int init(int argc, char *argv[])
@@ -21,14 +22,21 @@ int init(int argc, char *argv[])
    // get the Handler persistent pointer to attach anything you need
  //data_t **data = (data_t**)get_env(argv, US_HANDLER_DATA);
  //data_t **data = (data_t**)get_env(argv, US_VHOST_DATA);
-   data_t **data = (data_t**)get_env(argv, US_SERVER_DATA);
+ //  ww_server_t **data = (ww_server_t**)get_env(argv, US_SERVER_DATA);
    
    // initialize the persistent pointer by allocating our structure
    // attach structures, lists, sockets with a back-end/database server, 
    // file descriptiors for custom log files, etc.
-   *data = (data_t*)calloc(1, sizeof(data_t));
-   if(!*data)
-      return -1; // out of memory
+ //  *data = (data_t*)calloc(1, sizeof(ww_server_t));
+ //  if(!*data)
+ //     return -1; // out of memory
+  
+
+//  u8 *query_char = (u8*)get_env(argv, QUERY_CHAR);
+//  *query_char = '~'; // we must use "/!helloc.c" instead of "/?helloc.c"
+ 
+   
+   
 
    // define which handler states we want to be notified in main():
    // enum HANDLER_ACT { 
@@ -40,10 +48,12 @@ int init(int argc, char *argv[])
    //  HDL_BEFORE_WRITE, // after a reply was built, but before it is sent
    //  HDL_HTTP_ERRORS,  // when G-WAN is going to reply with an HTTP error
    //  HDL_CLEANUP };
-   u32 *states = get_env(argv, US_HANDLER_STATES);
-   *states = (1L << HDL_AFTER_ACCEPT) 
-           | (1L << HDL_AFTER_READ)
-           | (1L << HDL_BEFORE_WRITE);
+   u32 *states = (u32*)get_env(argv, US_HANDLER_STATES);
+   *states = (1L << HDL_AFTER_ACCEPT)
+       | (1L << HDL_AFTER_READ)
+		   | (1L << HDL_BEFORE_PARSE)
+		   | (1L << HDL_AFTER_PARSE)
+		   | (1L << HDL_BEFORE_WRITE);
    
    return 0;
 }
@@ -53,7 +63,7 @@ int init(int argc, char *argv[])
 void clean(int argc, char *argv[])
 {
    // free any data attached to your persistence pointer
-   data_t **data = (data_t*)get_env(argv, US_SERVER_DATA);
+   struct ww_server_t **data = (struct ww_server_t*)get_env(argv, US_SERVER_DATA);
 
    // we could close a data->log custom file 
    // if the structure had a FILE *log; field
@@ -76,9 +86,6 @@ void clean(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-   // get the Handler persistent pointer if we attached anything to it
-   data_t *data = (data_t*)get_env(argv, US_SERVER_DATA);
-
    // just helping you to know where you are:
    static char *states[] =
    {
@@ -94,8 +101,11 @@ int main(int argc, char *argv[])
       ""
    };
    long state = (long)argv[0];
-   //printf("Handler state:%ld:%s\n", state, states[state]);
-   
+/*   if(state >= 0 && state <= HDL_CLEANUP)
+    printf("Handler state:%ld:%s\n", state, states[state]);
+   else
+    printf("Handler state:%ld\n", state);
+//*/ 
    switch(state)
    {
       // ----------------------------------------------------------------------
@@ -141,8 +151,17 @@ int main(int argc, char *argv[])
       //                on the client request -or your altered version)
       case HDL_AFTER_READ:
       {
-         char *szRequest = (char*)get_env(argv, REQUEST);
+         //char *szRequest = (char*)get_env(argv, REQUEST);
          // do something with the request (re-write URL? do it in-place)
+         xbuf_t *read_xbuf = (xbuf_t*)get_env(argv, READ_XBUF);
+         char *s = read_xbuf->ptr;
+         if(*s++ == 'P' && *s++ == 'O' && *s++ == 'S' && *s++ == 'T' && *s++ == ' ' && *s++ == '/' && *s++ == 'd' && *s ++ == '/')
+         {
+           //we replace first char with ?
+           *s ++ = '?';
+           //xbuf_replfrto(read_xbuf, read_xbuf->ptr, read_xbuf->ptr + 16, "/blog", "/?blog");
+           //printf("after rewrite:%s",read_xbuf->ptr);
+         }
       }
       break;
       // ----------------------------------------------------------------------
