@@ -15,6 +15,16 @@
 #include <stdio.h>   // printf()
 #include <string.h>  // strcmp()
 
+
+//@fixme: is there some memory leak in g-wan? I can not use stack memory. how g-wan implement the script-machine code transimision? If they using llvm or gcc wrap. It's seem this isn't a problem.
+//Follow is a simplest local thread storage alternative stack memory.SEE precede description.
+static const size_t host_buf_len = 64;
+
+#ifdef USE_CUSTOM_TLS
+//We initiate gv_hostbuf in init. //To prevent gwan compiler not initilize static memory,assign it to 0l.
+static char**  gv_hostbuf = 0l;
+#endif //USE_CUSTOM_TLS
+
 // init() will initialize server-wide data structures, load your files, etc.
 // ----------------------------------------------------------------------------
 // init() should return -1 if failure (to allocate memory for example)
@@ -31,6 +41,22 @@ int init(int argc, char *argv[])
  //  *data = (data_t*)calloc(1, sizeof(ww_server_t));
  //  if(!*data)
  //     return -1; // out of memory
+ 
+#ifdef USE_CUSTOM_TLS
+  //@FIXME: shall we need thread lock in here? dunno with g-wan....
+  if(!gv_hostbuf)
+  {
+    int work_num = (int)get_env(argv,NBR_WORKERS);
+    int i = 0;
+    gv_hostbuf = (char**)calloc(work_num,sizeof(char*));
+    for(;i < work_num; i++)
+    {
+      gv_hostbuf[i] = calloc(work_num,host_buf_len);
+    }
+    //printf("work_num is : %d",work_num);
+  }
+#endif //USE_CUSTOM_TLS
+
   
 
 //  u8 *query_char = (u8*)get_env(argv, QUERY_CHAR);
@@ -51,9 +77,9 @@ int init(int argc, char *argv[])
    //  HDL_CLEANUP };
    u32 *states = (u32*)get_env(argv, US_HANDLER_STATES);
    *states = (1L << HDL_HTTP_ERRORS)
+         | (1L << HDL_AFTER_READ)
 	 | (1L << HDL_BEFORE_WRITE);
-/*       | (1L << HDL_AFTER_READ)
-		   | (1L << HDL_BEFORE_PARSE)
+/*		   | (1L << HDL_BEFORE_PARSE)
 		   | (1L << HDL_AFTER_PARSE);//*/
    
    return 0;
@@ -63,15 +89,30 @@ int init(int argc, char *argv[])
 // ----------------------------------------------------------------------------
 void clean(int argc, char *argv[])
 {
-   // free any data attached to your persistence pointer
-   ww_server_t **data = (ww_server_t**)get_env(argv, US_SERVER_DATA);
+  // free any data attached to your persistence pointer
+  ww_server_t **data = (ww_server_t**)get_env(argv, US_SERVER_DATA);
 
-   // we could close a data->log custom file 
-   // if the structure had a FILE *log; field
-   // fclose(data->log);
+  // we could close a data->log custom file 
+  // if the structure had a FILE *log; field
+  // fclose(data->log);
 
-   if(data)
-      free(*data);
+  if(data)
+    free(*data);
+
+#ifdef USE_CUSTOM_TLS
+  if(gv_hostbuf)
+  {
+    int work_num = (int)get_env(argv,NBR_WORKERS);
+    int i = 0;
+    for(;i < work_num; i++)
+    {
+      free(gv_hostbuf[i]);
+    }
+    free(gv_hostbuf);
+    gv_hostbuf = 0l;
+    //printf("free: work_num is : %d",work_num);
+  }
+#endif //USE_CUSTOM_TLS
 }
 // ----------------------------------------------------------------------------
 // main() does the job for all the connection states below:
@@ -142,12 +183,7 @@ static char* startwith(char *s, char *msg,int len)
    {
      if( *s++ != *msg++) break;
    }
-   if(i == len)
-   {
-      while(*s && *s == ' ') s++;
-      return *s ? s : (char*)0l;
-   }
-   return (char*)0l;
+   return (i == len) ? s : (char*)0l;
 }
 
 static char* endwith(char *s,char *msg,int len)
@@ -158,11 +194,7 @@ static char* endwith(char *s,char *msg,int len)
    {
      if( *s-- != *msg--) break;
    }
-   if(i == len)
-   {
-      return s;
-   }
-   return (char*)0l;
+   return (i == len) ? s : (char*)0l;
 }
 
 
@@ -215,6 +247,68 @@ int main(int argc, char *argv[])
       //  First, we check first line is a valid HTTP request.
       case HDL_AFTER_READ:
       {
+        xbuf_t *read_xbuf = (xbuf_t*)get_env(argv, READ_XBUF);
+        if(!read_xbuf || !read_xbuf->ptr || read_xbuf->len < 20) break; //20 is min length requirement that include Host: header.
+        //if we not start from POST|GET /g/  : this mean gloabl asset.
+        char *url = read_xbuf->ptr;
+        if(url[0] == 'P' && url[1] == 'O' && url[2] == 'S' && url[3] == 'T' && url[4] == ' ')
+          url += 5;
+        if(url[0] == 'G' && url[1] == 'E' && url[2] == 'T' && url[3] == ' ')
+          url += 4;
+        if(url != read_xbuf->ptr && !startwith(url,"/g/",sizeof("/g/") -1 ) )
+        {
+          static const char msg[] = "Host: ";
+          char *host = xbuf_findstr(read_xbuf,msg);
+          if(host)
+          {
+            //int cur_worker = (int)get_env(argv,CUR_WORKER);
+            //char *hostbuf = gv_hostbuf[cur_worker-1];
+            char hostbuf[host_buf_len];
+            //printf("curret worker = %d",cur_worker);
+            char *s = hostbuf;
+            host += sizeof(msg) - 1;
+            strcpy(s,"/www.");
+            s+=5;
+
+            size_t left = read_xbuf->len - (host - read_xbuf->ptr); //the left valid content.
+            int dotcount = 0; //the count of '.'
+            if(left > (host_buf_len - 6)) left = host_buf_len - 6; //reduce left to safe length. 6 include ternimal space.
+
+            //printf("left =  %d\r\n",left);
+            while(left-- > 0 && *host != '\r')
+            {
+              if(*host == '.') dotcount++;
+              *s++ = tolower(*host++);
+            }
+            //printf("left =  %d\r\n",left);
+            
+            //we are in error situation. insufficent space?
+            if(*host != '\r')
+              break;
+
+            //len store the length that insert to xbuf_read.
+            size_t len = s - hostbuf;
+            *s++ = 0;
+            
+            //printf("len =  %d,hostbuf=%s\r\n",len,hostbuf);
+            //assign valid host prefix to s pointer.
+            if(dotcount == 1)
+            {//one dot mean main-domain.
+              s = hostbuf;
+            }else{
+              s = hostbuf+4;
+              *s = '/';
+              len -= 4;
+            }
+            
+            //printf("len =  %d,s=%s\r\n",len,s);
+            
+            //printf("before rewrite: %s\r\n",url);
+            xbuf_insert(read_xbuf,url,len,s);
+            //printf("after rewrite: %s\r\n",read_xbuf->ptr);
+
+          }
+        }
 #if 0
          //The server rewrite solution is discard. Because xbuf_t of G-Wan is heavily thread-aware.
 	 //I can not operate it just like follow code. read_xbuf is MUTABLE.
@@ -501,78 +595,77 @@ int main(int argc, char *argv[])
         // char string[256];
         // s_snprintf(string, sizeof(string)-1, "whatever", x,y,z);
         // fputs(string, data->log);
-	int *pHTTP_status;
-	pHTTP_status = (int*)get_env(argv, HTTP_CODE);
-	if(pHTTP_status && *pHTTP_status == 404) // is it a 404 error?
-	{
-	  u32 mod = 0, len = 0;
-	  http_t *http = (http_t*)get_env(argv, HTTP_HEADERS);
-	  char *request = (char*)get_env(argv, REQUEST);
-	  char *s = request;
-	  size_t url_length = 0;
-	  while(*s++ != ' '); //skip GET
-	  while(*s++ == ' '); //skip ' '
-	  while(*s && *s != ' ' && *s != '\r') s++,url_length++; //skip URL
-	  
-	  //printf("len:%d,s:%s,request:%s",url_length,s,request);
-	  
-	  if(url_length > 5 && endwith(s,".html",5))
-	  {
-	    char *c = cacheget(argv, "index.html", &len, 0, pHTTP_status, &mod, 0);
-	    if(!c)
-	    {
-	      // since we fetch index.html from the cache, make sure that it's there
-	      char str[1024] = {0};
-	      char *wwwpath = (char*)get_env(argv, WWW_ROOT);// get "/www" path
-	      xbuf_t f;      // create a dynamic buffer
-	      xbuf_init(&f); // initialize buffer
+        int *pHTTP_status;
+        pHTTP_status = (int*)get_env(argv, HTTP_CODE);
+        if(pHTTP_status && *pHTTP_status == 404) // is it a 404 error?
+        {
+          u32 mod = 0, len = 0;
+          http_t *http = (http_t*)get_env(argv, HTTP_HEADERS);
+          char *request = (char*)get_env(argv, REQUEST);
+          char *s = request;
+          size_t url_length = 0;
+          while(*s++ != ' '); //skip GET
+          while(*s++ == ' '); //skip ' '
+          while(*s && *s != ' ' && *s != '\r') s++,url_length++; //skip URL
+          
+          //printf("len:%d,s:%s,request:%s",url_length,s,request);
+          
+          if(url_length > 5 && endwith(s,".html",5))
+          {
+            char *c = cacheget(argv, "index.html", &len, 0, pHTTP_status, &mod, 0);
+            if(!c)
+            {
+              // since we fetch index.html from the cache, make sure that it's there
+              char str[1024] = {0};
+              char *wwwpath = (char*)get_env(argv, WWW_ROOT);// get "/www" path
+              xbuf_t f;      // create a dynamic buffer
+              xbuf_init(&f); // initialize buffer
 
-	      s_snprintf(str, 1023, "%s/index.html", wwwpath);   // build full path
-	      
-	      xbuf_frfile(&f, str);
-	      if(f.len)
-	      {
-		cacheadd(argv, "index.html", f.ptr, f.len, ".html", 200, 0); // never expire
-		c = cacheget(argv, "index.html", &len, 0, pHTTP_status, &mod, 0);
-		xbuf_free(&f);
-	      }
-	    }
-	    if(c)
-	    {
-	      *pHTTP_status = 200; // setup 200.
-	      char *date = (char*)get_env(argv, SERVER_DATE);
-	      char szmodified[64];
-	      static char buf[] =
-		  "HTTP/1.1 %s\r\n"
-		  "Date: %s\r\n"
-		  "Last-Modified: %s\r\n"
-		  "Content-type: text/html\r\n"
-		  "Content-Length: %u\r\n" // HTML body length
-		  "Connection: keep-alive\r\n\r\n";
-	      build_headers(argv, buf,
-			http_status(*pHTTP_status), // "200 OK" here
-			date,                       // current HTTP time
-			time2rfc(mod, szmodified)  // file HTTP time
-			,len);                       // file length
-	      
-/**	      static const char buf[] =
-		  "HTTP/1.1 %s\r\n"
-		  "Date: %s\r\n"
-		  "Last-Modified: %s\r\n"
-		  "Content-type: text/html\r\n"
-		  "Not-Found: %s\r\n" //Cutome header for cliend process.(We avoid using Referer here).
-		  "Content-Length: %u\r\n" // HTML body length
-		  "Connection: keep-alive\r\n\r\n";
-		  
-	      xbuf_xcat(get_reply(argv), buf,
-			http_status(*pHTTP_status), //"200 OK" here
-			date,time2rfc(mod, szmodified),
-			urlbuf,len);*/
-	      set_reply(argv, c, len, *pHTTP_status); // no copy
-	      return 2; // 2: Send a server reply          */
-	    }
-	  }
-	}
+              s_snprintf(str, 1023, "%s/index.html", wwwpath);   // build full path
+              
+              xbuf_frfile(&f, str);
+              if(f.len)
+              {
+                cacheadd(argv, "index.html", f.ptr, f.len, ".html", 200, 0); // never expire
+                c = cacheget(argv, "index.html", &len, 0, pHTTP_status, &mod, 0);
+                xbuf_free(&f);
+              }
+            }
+            if(c)
+            {
+              *pHTTP_status = 200; // setup 200.
+              char *date = (char*)get_env(argv, SERVER_DATE);
+              char szmodified[64];
+              static char buf[] =
+                "HTTP/1.1 %s\r\n"
+                "Date: %s\r\n"
+                "Last-Modified: %s\r\n"
+                "Content-type: text/html\r\n"
+                "Content-Length: %u\r\n" // HTML body length
+                "Connection: keep-alive\r\n\r\n";
+                  build_headers(argv, buf,
+                http_status(*pHTTP_status), // "200 OK" here
+                date,                       // current HTTP time
+                time2rfc(mod, szmodified)  // file HTTP time
+                ,len);                       // file length
+      /**	      static const char buf[] =
+            "HTTP/1.1 %s\r\n"
+            "Date: %s\r\n"
+            "Last-Modified: %s\r\n"
+            "Content-type: text/html\r\n"
+            "Not-Found: %s\r\n" //Cutome header for cliend process.(We avoid using Referer here).
+            "Content-Length: %u\r\n" // HTML body length
+            "Connection: keep-alive\r\n\r\n";
+            
+              xbuf_xcat(get_reply(argv), buf,
+            http_status(*pHTTP_status), //"200 OK" here
+            date,time2rfc(mod, szmodified),
+            urlbuf,len);*/
+              set_reply(argv, c, len, *pHTTP_status); // no copy
+              return 2; // 2: Send a server reply          */
+            }
+          }
+        }
       }
       break;
       // ----------------------------------------------------------------------
