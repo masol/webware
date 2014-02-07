@@ -1,0 +1,77 @@
+#
+#
+#
+#
+#### -*-mode: nginx; mode: flyspell-prog;  ispell-local-dictionary: "american" -*-
+### Block all illegal host headers. Taken from a discussion on nginx
+### forums. Cf. http://forum.nginx.org/read.php?2,3482,3518 following
+### a suggestion by Maxim Dounin. Also suggested in
+### http://nginx.org/en/docs/http/request_processing.html#how_to_prevent_undefined_server_names.
+server {
+    listen 80 default_server deferred; # IPv4
+    ## Socket options can only be specified once, hence the different
+    ## address for the 'default' server.
+    # listen [fe80::202:b3ff:fe1e:8328]:80 default_server ipv6only=on; # IPv6
+
+    root /var/www/webware/src/www/$http_host;
+    server_name $http_host;
+
+    ## See the blacklist.conf file at the parent dir: /etc/nginx.
+    ## Deny access based on the User-Agent header.
+    if ($bad_bot) {
+        return 444;
+    }
+    ## Deny access based on the Referer header.
+    if ($bad_referer) {
+        return 444;
+    }
+
+    ## Protection against illegal HTTP methods. Out of the box only HEAD,
+    ## GET and POST are allowed.
+    if ($not_allowed_method) {
+        return 405;
+    }
+
+   ## If you're using a Nginx version greater or equal to 1.1.4 then
+   ## you can use keep alive connections to the upstream be it
+   ## FastCGI or Apache. If that's not the case comment out the line below.    
+   fastcgi_keep_conn on; # keep alive to the FCGI upstream
+
+   location = /favicon.ico {
+      log_not_found off;
+      access_log off;
+   }
+
+   location = /nop.gif {empty_gif;}
+
+   location /d/ {
+      proxy_http_version 1.1;
+
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header Host $http_host;
+      proxy_set_header X-NginX-Proxy true;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+
+      proxy_pass http://nodejs/;
+      proxy_redirect off;
+    }
+
+#    location /socket.io/ {
+#      proxy_http_version 1.1;
+
+#      proxy_set_header X-Real-IP $remote_addr;
+#      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#      proxy_set_header Host $http_host;
+#      proxy_set_header Upgrade $http_upgrade;
+#      proxy_set_header Connection "upgrade";
+
+#      proxy_pass http://nodejs/;
+#      proxy_redirect off;
+#    }
+
+   ## Including the Nginx stub status page for having stats about
+   ## Nginx activity: http://wiki.nginx.org/HttpStubStatusModule.
+   include nginx_status_vhost.conf;
+}
