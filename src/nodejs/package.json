@@ -9,7 +9,9 @@
     "start": "/etc/init.d/webware start"
   },
   "dependencies": {
-    "ws": "latest"
+    "ws": "latest",
+    "url": "latest",
+    "underscore": "latest"
   }
 }
 
