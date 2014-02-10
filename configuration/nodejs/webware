@@ -92,7 +92,7 @@ function checkServiceStatus {
   for (( i=1; i<=$cpu; i++ )) do
     checkServiceStatusImpl ${i}
   done
-  checkServiceStatusImpl "bkp"
+#   checkServiceStatusImpl "bkp"
   return 0;
 }
 
@@ -145,7 +145,7 @@ function startService {
   do
     startServiceImpl ${i}
   done
-  startServiceImpl "bkp"
+# startServiceImpl "bkp"
   RETVAL=0
   return 0;
 }
@@ -197,7 +197,7 @@ function stopService {
   do
     stopServiceImpl ${i}
   done
-  stopServiceImpl "bkp"
+#  stopServiceImpl "bkp"
   RETVAL=0
   return 0;
 }

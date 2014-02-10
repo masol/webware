@@ -9,9 +9,16 @@ var blockfuncs = {
 
 function sandbox(script,parameters){
   with(blockfuncs){
-    script.runInThisContext();
+    try{
+      for(var i in parameters)
+        this[i] = parameters[i];
+      script.runInThisContext();
+    }catch(e)
+    {
+      console.log(e);
+    }
     //if script no return statement.
-    return returnobject;
+    //return returnobject;
   }
 }
 
@@ -52,6 +59,24 @@ function main(){
 
   //@FIXME: shall we use a sandbox of spawn-child to run external script?
   function handler(req,res){
+
+    function test(request,response){
+      //console.log(request);
+      response.writeHead(200, {"Content-Type": "text/plain"});
+      //response.end(JSON.stringify(request));
+      //
+      var body = "";
+      for( i in request.headers)
+      {
+      body += i;
+      body += '=';
+      body += request.headers[i] + "<br/>";
+      }
+      response.end(body);
+    }
+//    test(req,res);
+//    return;
+
     //Whether host header is defined?
     if(!req.headers['host'])
     {
@@ -70,19 +95,12 @@ function main(){
       function after_handler_process(){
         
         var handler = path_handler[handler_fullpath];
-        if(handler && !us.isBoolean(rewriter))
+       
+        if(handler && !us.isBoolean(handler))
         {
-          res.writeHead(200, {"Content-Type": "text/plain"});
-          //response.end(JSON.stringify(request));
-          //
-          var body = "";
-          for( i in req.headers)
-          {
-            body += i;
-            body += '=';
-            body += req.headers[i] + "<br/>";
-          }
-          res.end(body);
+          //sandbox(handler,{request:req,response:res});
+          test(req,res);
+/*          */
         }else{
           //return 404 not found.
           res.writeHead(404);
@@ -95,14 +113,15 @@ function main(){
           path_handler[handler_fullpath] = true;
         }else{
           //compile content.
-          var script = vm.createScript(content,config.rewriter);
+          var script = vm.createScript(content,path.relative(config.site,handler_fullpath));
           path_handler[handler_fullpath] = script ? script : true;
         }
         after_handler_process();
       }
       
       function after_rewrite_process(){
-        var url = (us.isBoolean(rewriter)) ? req.url : sandbox(rewriter,{'url':req.url});
+        var url_remove_d = req.url.substr(2);
+        var url = (us.isBoolean(rewriter)) ? url_remove_d : sandbox(rewriter,{'url':url_remove_d});
         var urlobj = urlparser.parse(url);
         if(urlobj && urlobj.pathname)
         {
