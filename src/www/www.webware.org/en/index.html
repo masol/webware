@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <title>Compatibility Checking...</title>
+    <meta name="description" content="WebWare WebSite"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <link rel="shortcut icon" href="/imgs/favicon.ico"/>
+    <!-- Bootstrap core CSS -->
+    <link href="/bower/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script type="text/javascript" charset="utf-8">
+    </script>
+  </head>
+
+  <body>
+    <noscript>
+      <p>Javascript disabled,visit <a href="/en/enablejs.html">here</a> for detail.</p>
+    </noscript>
+
+    <div id="template">
+    </div>
+
+    <!--TODO Using CDN address out of China -->
+    <script src="/bower/jquery/jquery.min.js" type="text/javascript" charset="utf-8"></script>
+    <!--<script src="/bower/bootstrap/dist/js/bootstrap.min.js"></script>-->
+    <script src="/bower/sammy/lib/min/sammy-latest.min.js" type="text/javascript" charset="utf-8"></script>
+<!--<script type="text/javascript" charset="utf-8">
+//We don't support dynamic template at noew. This mean, if you need switch template, you must change Location instead hasher.
+      var wwPackage = wwPackage || new function(){
+        /** @brief store current template url.
+        **/
+        this.template = "";
+        /** @brief switch current dependency set.
+         * @details This only handle css fileset. Please using jquery.getScript to deal it.
+        **/
+        this.switchDependency = function (depset)
+        {
+        };
+        /** @brief loading a template from url. the template itself must call dependency to set the dependency.
+        **/
+        this.loadTemplate = function (url)
+        {
+        };
+        alert(this);
+      };
+
+      function addCSS(url){
+      }
+      function addJsLib(url){
+      }
+
+      function switchTemplate(url)
+      {
+      }
+
+      function switchPage(url)
+      //page url: first part of url is the id where the content sitted in.
+      {
+      }
+    </script>
+-->
+    <script type="text/javascript" charset="utf-8">
+      //If a section need clear. It must call global app to listener event 'location-changed' or 'event-context-after' follow your condition.
+      //This is 
+      var webwareApp;
+      ;(function($){
+        webwareApp = webwareApp || $.sammy(function() {
+          /** @brief which url trigger the login?
+          */
+          this.loginTarget = "";
+          this.get('#/', function(app,verb,path,target) {
+            //ERROR occupy. redirect to error handler.
+          });
+
+          this.get('#/:template/.*', function(app) {
+            //$('#main').text('Hello World');
+            //GetTemplatePart.
+            alert("app == this:" + (app == this));
+            var needauth = app.params['auth'] ? true : false;
+            console.log(needauth);
+
+            if(needauth && !app.isAuth())
+            {
+              app.loginTarget = app.path;
+              //redirect to login.
+              app.redirect("#/pub/login");
+            }
+
+            //loadtemplate.
+/*            for(var i in this)
+{
+    console.log(i + '=' + this[i]);
+    for(var j in this[i])
+    {
+       console.log('this[' + i + '][' + j + ']=' + this[i][j]);
+    }
+}
+            alert(this.params['template']);
+            alert(this.params['auth']);
+            var urlobj = app.getUrlInfo();
+            alert(app.getLocation());
+//*/
+          });
+
+          this.isAuth = function(){
+            return true;
+          };
+
+          /**
+           * @brief check htmlstorage(if not support fallback to cookie) to get the user-set lang prefix.otherwise get it from accept header.
+           * @details we must loading any lang-aware partion to increase the ablility of caching.(Our index can cache in client and wiht lang-unware).
+           *   But webware not implement the feature of loading template full dynamically.
+          **/
+          this.getLangPrefix = function(){
+            //@place holder,not implement at now.
+            return "en";
+          };
+
+          /** @brief this will support client-sider cdn independent DNS.
+          **/
+          this.getFastestServer = function(){
+            //@plache holder,not implement at now.
+            return '';
+          }
+
+        });
+
+        $(function(){
+          //try load template.
+          var tpl = webwareApp.getFastestServer() + '/' + webwareApp.getLangPrefix() + '/template/pub.html';
+          $.ajax(tpl).done(function(data) {
+            $('#template').html(data);
+          }).fail(function(e){
+            //@todo support dynamic 404.
+            alert(e);
+          });
+
+
+          webwareApp.run();
+
+          if(webwareApp.getLocation() == '/')
+          {
+            webwareApp.setLocation("#/");
+          }
+
+          $.ajax("/bower/sammy/lib/min/sammy-latest.min.js").done(function(data) {
+          }).fail(function(e){
+          });
+
+          $.ajax("/bower/sammy/lib/min/sammy-latest.min.js").done(function(data) {
+          }).fail(function(e){
+          });
+
+          $.ajax("/bower/sammy/lib/min/sammy-latest.min.js").done(function(data) {
+          }).fail(function(e){
+          });
+
+
+
+        });
+      })(jQuery);
+    </script>
+  </body>
+</html>

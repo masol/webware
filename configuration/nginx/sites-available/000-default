@@ -38,7 +38,11 @@ server {
    ## If you're using a Nginx version greater or equal to 1.1.4 then
    ## you can use keep alive connections to the upstream be it
    ## FastCGI or Apache. If that's not the case comment out the line below.    
-   fastcgi_keep_conn on; # keep alive to the FCGI upstream
+   #fastcgi_keep_conn on; # keep alive to the FCGI upstream
+
+   ## @FIXME: shall we redirect error page to nodejs for more sophisticated processing???
+   error_page 500 502 503 504  /500.html;  
+   error_page 404  /404.html;
 
    location = /favicon.ico {
      log_not_found off;
@@ -57,6 +61,7 @@ server {
 
    location /bower/ {
      alias /var/www/webware/src/www/syswide/bower_components/;
+     autoindex  on;
      gzip_static on;
      access_log off;
      expires 30d;

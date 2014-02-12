@@ -1,26 +1,10 @@
-
-/**
- * Module dependencies.
- */
-
-var blockfuncs = {
-  require : function(){}
-};
-
-function sandbox(script,parameters){
-  with(blockfuncs){
-    try{
-      for(var i in parameters)
-        this[i] = parameters[i];
-      script.runInThisContext();
-    }catch(e)
-    {
-      console.log(e);
-    }
-    //if script no return statement.
-    //return returnobject;
-  }
-}
+// ============================================================================
+// This file is part of webware.
+// Published under the Apache License, Version 2.0.
+// Copyright (C) by masol.li@gmail.com.
+//
+// See https://github.com/masol/webware for more information.
+// ============================================================================
 
 function main(){
   
@@ -29,10 +13,12 @@ function main(){
   var us = require('underscore');
   var vm = require('vm');
   var path = require('path');
+  var utils = require('./libs/utils.js');
 
   var config = {
     "site" : __dirname + "/site/",
-    "rewriter" : "/rewriter.js"
+    "rewriter" : "/rewriter.js",
+    "public" : path.normalize(__dirname + "/../www/"),
   };
 
   var config_file = __dirname + '/config.json';
@@ -54,28 +40,17 @@ function main(){
   var server = require('http').createServer(handler)
       ;//, io = require('socket.io').listen(server)
 
-  var rewrite_handler = {};
-  var path_handler = {};
-
+  ///@brief key is host. value is true or function. (function is module.exports.rewriter).
+  var rewriter_handler = {};
+  
+  ///@brief key is fullpath(host is encode in path). value is true or function. (function is module.exports.http_handler).
+  var http_handler = {};
+  
+  ///@brief key is fullpath(host is encode in path). value is true or function. (function is module.exports.socket_handler).
+  var socket_handler = {};
+  
   //@FIXME: shall we use a sandbox of spawn-child to run external script?
   function handler(req,res){
-
-    function test(request,response){
-      //console.log(request);
-      response.writeHead(200, {"Content-Type": "text/plain"});
-      //response.end(JSON.stringify(request));
-      //
-      var body = "";
-      for( i in request.headers)
-      {
-      body += i;
-      body += '=';
-      body += request.headers[i] + "<br/>";
-      }
-      response.end(body);
-    }
-//    test(req,res);
-//    return;
 
     //Whether host header is defined?
     if(!req.headers['host'])
@@ -89,18 +64,30 @@ function main(){
     
     try{
       //Is host wide rewrite function exist?
-      var rewriter = rewrite_handler[req.headers['host']];
+      var rewriter = rewriter_handler[req.headers['host']];
       var handler_fullpath;
       
       function after_handler_process(){
         
-        var handler = path_handler[handler_fullpath];
-       
-        if(handler && !us.isBoolean(handler))
+        var handler = http_handler[handler_fullpath];
+        
+        if(us.isFunction(handler))
         {
-          //sandbox(handler,{request:req,response:res});
-          test(req,res);
-/*          */
+          try{
+            var publicCache = config.public + req.headers['host'];
+            utils.readFile = function(virtualPath,callback){
+              //console.log('enter readFile:' + publicCache);
+              fs.readFile(publicCache + path.normalize(virtualPath), callback); 
+            };
+            //console.log('call handler');
+            handler(req,res,utils);
+          }catch(e)
+          {
+            //return 500 internal error.
+            res.writeHead(500);
+            res.end();
+            console.log(e);
+          }
         }else{
           //return 404 not found.
           res.writeHead(404);
@@ -110,23 +97,37 @@ function main(){
       
       function handler_loaded(err,content){
         if(err){
-          path_handler[handler_fullpath] = true;
+          http_handler[handler_fullpath] = true;
         }else{
           //compile content.
-          var script = vm.createScript(content,path.relative(config.site,handler_fullpath));
-          path_handler[handler_fullpath] = script ? script : true;
+          try {
+            module._compile(content);
+            http_handler[handler_fullpath] =  module.exports.http_handler ? module.exports.http_handler : true;
+            //console.log('compile handler');
+          }catch(e) {
+            http_handler[handler_fullpath] = true;
+            console.log(e);
+          }
         }
         after_handler_process();
       }
       
       function after_rewrite_process(){
         var url_remove_d = req.url.substr(2);
-        var url = (us.isBoolean(rewriter)) ? url_remove_d : sandbox(rewriter,{'url':url_remove_d});
+        var url = url_remove_d;
+        if(us.isFunction(rewriter))
+        {
+          try{
+            url = rewriter(url_remove_d);
+          }catch(e){
+            console.log(e);
+          }
+        }
         var urlobj = urlparser.parse(url);
         if(urlobj && urlobj.pathname)
         {
           handler_fullpath = config.site + req.headers['host'] + path.normalize(urlobj.pathname);
-          if(!path_handler[handler_fullpath])
+          if(!http_handler[handler_fullpath])
           {//load handler from the fullpath.
             fs.readFile(handler_fullpath, 'utf8',handler_loaded);
           }else{
@@ -140,11 +141,17 @@ function main(){
         var filename = config.site + req.headers['host'] + config.rewriter;
         fs.readFile(filename, 'utf8',function(err, content){
             if(err){
-              rewriter = rewrite_handler[req.headers['host']] = true;
+              rewriter = rewriter_handler[req.headers['host']] = true;
             }else{
+              var module = new Module(req.headers['host'] + config.rewriter,config.site);
               //compile content.
-              var script = vm.createScript(content,config.rewriter);
-              rewriter = rewrite_handler[req.headers['host']] = script ? script : true;
+              try {
+                module._compile(content);
+                rewriter = rewriter_handler[req.headers['host']] = module.exports.rewriter ? module.exports.rewriter : true;
+              }catch(e) {
+                console.log(e);
+                rewriter = rewriter_handler[req.headers['host']] = true;
+              }
             }
             after_rewrite_process();
           }
