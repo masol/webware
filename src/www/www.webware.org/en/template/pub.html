@@ -7,21 +7,15 @@
         </div>
         
         <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-          <ul class="nav navbar-nav">
-            <li class="active">
-              <a href="#/">Home</a>
+          <ul id='pub_menu' class="nav navbar-nav">
+            <li>
+              <a href="#/pub/home.html">Home</a>
             </li>
             <li>
-              <a href="#/workflow">Workflow</a>
+              <a href="#/pub/workflow.html">Workflow</a>
             </li>
           </ul>
-          <ul class="nav navbar-nav navbar-right">
-            <li>
-              <a href="#/login.html">Login</a>
-            </li>
-            <li>
-              <a href="#/Register.html">Register</a>
-            </li>
+          <ul id='user_menu' class="nav navbar-nav navbar-right">
           </ul>
           <form class="navbar-form navbar-right" role="search">
             <div class="form-group">
@@ -93,4 +87,61 @@
       </div>
     </div>
   </footer>
+  <script type="text/javascript" charset="utf-8">
+    ;(function($){
+      var old_active_element;
+      function urlChanged(e,url){
+        function traversalMenu(id)
+        {
+          $('#'+id + ' > li').each(function(index){
+            var a = $(this).children('a');
+            if(a.length > 0)
+            {
+              if(a[0].href.indexOf(url) >= 0)
+              {
+//                console.log(old_active_element);
+                if(old_active_element){
+                  old_active_element.removeClass('active');
+                }
+                $(this).addClass('active');
+                old_active_element = $(this);
+                return false;
+              }
+            }
+          });
+        }
+        ///@brief traversal menu to make the decision which one is selected.
+        traversalMenu('pub_menu');
+        traversalMenu('user_menu');
+//      console.log(url);
+      };
+      function userLogin(e){
+      // `e` is the event object, you probably don't care about it.
+        //console.log("user login");
+        $('#user_menu').html("<li><a href='#/pub/user.html'>UserCenter</a></li>" +
+            "<li><a href='#/pub/logout.html'>Logout</a></li>");
+      };
+      function userLogout(e){
+      // `e` is the event object, you probably don't care about it.
+        //console.log("user logout");
+        $('#user_menu').html("<li><a href='#/pub/login.html'>Login</a></li>" +
+            "<li><a href='#/pub/register.html'>Register</a></li>");
+      };
+      $.subscribe("/tpl/url_changed",urlChanged);
+      $.subscribe("/tpl/user_login",userLogin);
+      $.subscribe("/tpl/user_logout",userLogout);
+      if(wwUtils.isLogined())
+      {
+        $.publish("/tpl/user_login");
+      }else{
+        $.publish("/tpl/user_logout");
+      }
+      //$.publish("/tpl/url_changed",webwareApp.getLocation());
+      urlChanged(null,webwareApp.getLocation());
+      webwareApp.after(function(){
+        $.publish("/tpl/url_changed",webwareApp.getLocation());
+      });
+    })(jQuery);
+  </script>
+
 </div>

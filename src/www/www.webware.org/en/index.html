@@ -24,110 +24,141 @@
     <script src="/bower/jquery/jquery.min.js" type="text/javascript" charset="utf-8"></script>
     <!--<script src="/bower/bootstrap/dist/js/bootstrap.min.js"></script>-->
     <script src="/bower/sammy/lib/min/sammy-latest.min.js" type="text/javascript" charset="utf-8"></script>
-<!--<script type="text/javascript" charset="utf-8">
-//We don't support dynamic template at noew. This mean, if you need switch template, you must change Location instead hasher.
-      var wwPackage = wwPackage || new function(){
-        /** @brief store current template url.
-        **/
-        this.template = "";
-        /** @brief switch current dependency set.
-         * @details This only handle css fileset. Please using jquery.getScript to deal it.
-        **/
-        this.switchDependency = function (depset)
-        {
-        };
-        /** @brief loading a template from url. the template itself must call dependency to set the dependency.
-        **/
-        this.loadTemplate = function (url)
-        {
-        };
-        alert(this);
-      };
+    <!--We not using current ui-binding mechanism. We need delegate sub-page to deal the binding. So we no centrilized view-model.
+     Instead of using some exist MV* framework. we recommend using simple pub/sub mechanism to decople View&Model.
+    <script src="/bower/knockout/build/output/knockout-latest.js" type="text/javascript" charset="utf-8"></script>-->
 
-      function addCSS(url){
-      }
-      function addJsLib(url){
-      }
-
-      function switchTemplate(url)
-      {
-      }
-
-      function switchPage(url)
-      //page url: first part of url is the id where the content sitted in.
-      {
-      }
-    </script>
--->
     <script type="text/javascript" charset="utf-8">
-      //If a section need clear. It must call global app to listener event 'location-changed' or 'event-context-after' follow your condition.
-      //This is 
+      window.wwUtils = window.wwUtils || new function(){
+        /** @brief which url trigger the login?
+        */
+        this.loginTarget = "";
+
+        this.isLogined = function(){
+            return false;
+        };
+        /**
+        * @brief check htmlstorage(if not support fallback to cookie) to get the user-set lang prefix.otherwise get it from accept header.
+        * @details we must loading any lang-aware partion to increase the ablility of caching.(Our index can cache in client and wiht lang-unware).
+        *   But webware not implement the feature of loading template full dynamically.
+        **/
+        this.getLangPrefix = function(){
+          //@TODO: implement 
+          return "en";
+        };
+        /** @brief this will support client-sider cdn independent DNS.
+        **/
+        this.getFastestServer = function(){
+          //@TODO: implement 
+          return '';
+        };
+      };
       var webwareApp;
       ;(function($){
+
+        /*window.pubViewModel = window.pubViewModel || new function(){
+          var self = this;
+          self.currentPage = ko.observable();
+          self.gotoPage = function(url) {
+            self.currentPage(url);
+          };  
+        };*/
+
+        ///@brief pub-sub plugin for jQuery. orignal from tiny-pubsub(https://github.com/cowboy/jquery-tiny-pubsub).
+        var pubsub = $({});
+        $.subscribe = function() {
+          pubsub.on.apply(pubsub, arguments);
+        };
+        $.unsubscribe = function() {
+          pubsub.off.apply(pubsub, arguments);
+        };
+        $.publish = function() {
+          pubsub.trigger.apply(pubsub, arguments);
+        };
+
         webwareApp = webwareApp || $.sammy(function() {
-          /** @brief which url trigger the login?
-          */
-          this.loginTarget = "";
-          this.get('#/', function(app,verb,path,target) {
-            //ERROR occupy. redirect to error handler.
+          this.helpers({
+            ///@brief: swap content.do not override sammy's swap.
+            swapSection :  function(app,path,id){
+              var sep = (path[0] == '/') ? '' : '/';
+              var url = window.wwUtils.getFastestServer() + '/' + window.wwUtils.getLangPrefix() + sep + path;
+              var startTime = Date.now();
+
+              var selector = '#' + id;
+              ///@brief: fade out current content.
+              if($(selector).length > 0)
+              {//Fade out.
+                $(selector).fadeOut(200);
+              }
+
+              function  changeContent(data){
+                function replaceData(){
+                  $(selector).html(data);
+                  var elapse = Date.now() - startTime;
+                  $(selector).stop();
+                  //console.log('stop in ' + elapse);
+                  $(selector).fadeIn(elapse);
+                }
+                if($(selector).length == 0)
+                {//template are not ready.wait until it ready.
+                  var count = 0;
+                  var timer = setInterval(function(){
+                    if( $(selector).length > 0) {
+                      clearInterval(timer);
+                      replaceData();
+                      timer = null;
+                    }else if(count++ > 100)
+                    {//can not loading template!
+                      clearInterval(timer);
+                      alert('template can not loaded');
+                    }
+                  },50);
+                }else{
+                  replaceData();
+                }
+              }
+
+              $.ajax(url).done(changeContent).fail(function(e){
+                //support dynamic 404.
+                var url_404 = '/pub/404.html';
+                if(e.status == 404 && path != url_404)
+                {
+                  app.swapSection(app,url_404,id);
+                }else{
+                  if(e.status == 404) changeContent("<center><h1>404 Not Found</h1></center>");
+                  else changeContent("<center><h1>Status : " + e.status + "</h1></center>");
+                }
+              });
+            }
           });
 
-          this.get('#/:template/.*', function(app) {
-            //$('#main').text('Hello World');
-            //GetTemplatePart.
-            alert("app == this:" + (app == this));
+          this.get('#/.*', function(app) {
+            if(app.path == '#/')
+            {
+              app.redirect('#/pub/home.html');
+              return false;
+            }
+            var targetID = app.params['id'] ? app.params['id'] : "content";
             var needauth = app.params['auth'] ? true : false;
-            console.log(needauth);
 
             if(needauth && !app.isAuth())
             {
               app.loginTarget = app.path;
               //redirect to login.
-              app.redirect("#/pub/login");
+              app.redirect("#/pub/login.html");
+            }else{
+              var path = app.path.substr(app.path.indexOf('#') + 1);
+              app.swapSection(app,path,targetID);
             }
-
-            //loadtemplate.
-/*            for(var i in this)
-{
-    console.log(i + '=' + this[i]);
-    for(var j in this[i])
-    {
-       console.log('this[' + i + '][' + j + ']=' + this[i][j]);
-    }
-}
-            alert(this.params['template']);
-            alert(this.params['auth']);
-            var urlobj = app.getUrlInfo();
-            alert(app.getLocation());
-//*/
           });
-
-          this.isAuth = function(){
-            return true;
-          };
-
-          /**
-           * @brief check htmlstorage(if not support fallback to cookie) to get the user-set lang prefix.otherwise get it from accept header.
-           * @details we must loading any lang-aware partion to increase the ablility of caching.(Our index can cache in client and wiht lang-unware).
-           *   But webware not implement the feature of loading template full dynamically.
-          **/
-          this.getLangPrefix = function(){
-            //@place holder,not implement at now.
-            return "en";
-          };
-
-          /** @brief this will support client-sider cdn independent DNS.
-          **/
-          this.getFastestServer = function(){
-            //@plache holder,not implement at now.
-            return '';
-          }
-
+          this.get('/', function(app) {
+            app.redirect('#/pub/home.html');
+          });
         });
 
         $(function(){
-          //try load template.
-          var tpl = webwareApp.getFastestServer() + '/' + webwareApp.getLangPrefix() + '/template/pub.html';
+          //loading template.
+          var tpl = wwUtils.getFastestServer() + '/' + wwUtils.getLangPrefix() + '/template/pub.html';
           $.ajax(tpl).done(function(data) {
             $('#template').html(data);
           }).fail(function(e){
@@ -135,28 +166,8 @@
             alert(e);
           });
 
-
+          //ko.applyBindings(window.pubViewModel);
           webwareApp.run();
-
-          if(webwareApp.getLocation() == '/')
-          {
-            webwareApp.setLocation("#/");
-          }
-
-          $.ajax("/bower/sammy/lib/min/sammy-latest.min.js").done(function(data) {
-          }).fail(function(e){
-          });
-
-          $.ajax("/bower/sammy/lib/min/sammy-latest.min.js").done(function(data) {
-          }).fail(function(e){
-          });
-
-          $.ajax("/bower/sammy/lib/min/sammy-latest.min.js").done(function(data) {
-          }).fail(function(e){
-          });
-
-
-
         });
       })(jQuery);
     </script>
