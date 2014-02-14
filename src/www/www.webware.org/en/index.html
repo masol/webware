@@ -6,28 +6,31 @@
     <meta name="description" content="WebWare WebSite"/>
     <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
     <link rel="shortcut icon" href="/imgs/favicon.ico"/>
-    <!-- Bootstrap core CSS -->
-    <link href="/bower/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap core CSS
     <script type="text/javascript" charset="utf-8">
-    </script>
+    </script> -->
   </head>
 
   <body>
     <noscript>
       <p>Javascript disabled,visit <a href="/en/enablejs.html">here</a> for detail.</p>
     </noscript>
-
+    <!--TODO Using CDN address out of China -->
+    <link href="/bower/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    
     <div id="template">
     </div>
 
-    <!--TODO Using CDN address out of China -->
-    <script src="/bower/jquery/jquery.min.js" type="text/javascript" charset="utf-8"></script>
-    <!--<script src="/bower/bootstrap/dist/js/bootstrap.min.js"></script>-->
-    <script src="/bower/sammy/lib/min/sammy-latest.min.js" type="text/javascript" charset="utf-8"></script>
     <!--We not using current ui-binding mechanism. We need delegate sub-page to deal the binding. So we no centrilized view-model.
      Instead of using some exist MV* framework. we recommend using simple pub/sub mechanism to decople View&Model.
     <script src="/bower/knockout/build/output/knockout-latest.js" type="text/javascript" charset="utf-8"></script>-->
 
+<!--    <script src="/bower/headjs/dist/1.0.0/head.js" type="text/javascript" charset="utf-8"></script>
+    <script src="/bower/notifyjs/dist/notify.min.js" type="text/javascript" charset="utf-8"></script>
+    <script src="/bower/notifyjs/dist/styles/bootstrap/notify-bootstrap.js" type="text/javascript" charset="utf-8"></script> -->
+    
+    <script src="/bower/jquery/jquery.min.js" type="text/javascript" charset="utf-8"></script>
+    <script src="/bower/sammy/lib/min/sammy-latest.min.js" type="text/javascript" charset="utf-8"></script>
     <script type="text/javascript" charset="utf-8">
       window.wwUtils = window.wwUtils || new function(){
         /** @brief which url trigger the login?
@@ -54,15 +57,8 @@
         };
       };
       var webwareApp;
-      ;(function($){
 
-        /*window.pubViewModel = window.pubViewModel || new function(){
-          var self = this;
-          self.currentPage = ko.observable();
-          self.gotoPage = function(url) {
-            self.currentPage(url);
-          };  
-        };*/
+      ;(function($){
 
         ///@brief pub-sub plugin for jQuery. orignal from tiny-pubsub(https://github.com/cowboy/jquery-tiny-pubsub).
         var pubsub = $({});
@@ -156,20 +152,31 @@
           });
         });
 
-        $(function(){
-          //loading template.
-          var tpl = wwUtils.getFastestServer() + '/' + wwUtils.getLangPrefix() + '/template/pub.html';
-          $.ajax(tpl).done(function(data) {
+        //loading template.
+        var tpl = wwUtils.getFastestServer() + '/' + wwUtils.getLangPrefix() + '/template/pub.html';
+        var tpl_data = "";
+        $.ajax(tpl).done(function(data) {
+          if(document.readyState === "complete")
+          {
             $('#template').html(data);
-          }).fail(function(e){
-            //@todo support dynamic 404.
-            alert(e);
-          });
-
+          }else{
+            tpl_data = data;
+          }
+        }).fail(function(e){
+          //@todo support dynamic 404.
+          alert(e);
+        });
+        $(function(){
+          if(tpl_data.length > 0){
+            $('#template').html(tpl_data);
+            tpl_data = "";
+          }
           //ko.applyBindings(window.pubViewModel);
           webwareApp.run();
         });
       })(jQuery);
     </script>
+    <!--<script src="/bower/bootstrap/dist/js/bootstrap.min.js"></script>-->
+    <script src="/bower/headjs/dist/1.0.0/head.js" type="text/javascript" charset="utf-8"></script>
   </body>
 </html>

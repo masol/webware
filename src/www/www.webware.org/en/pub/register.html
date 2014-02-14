@@ -1,45 +1,156 @@
-<div class="row-fluid clearfix centered-form">
-  <div class="col-xs-12 col-sm-8 col-md-4 col-sm-offset-2 col-md-offset-4">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <h3 class="panel-title">Please sign up for Webware <small>It's free!</small></h3>
-      </div>
-      <div class="panel-body">
-        <form role="form">
-          <div class="row">
-            <div class="col-xs-6 col-sm-6 col-md-6">
-              <div class="form-group">
-                <input type="text" name="first_name" id="first_name" class="form-control input-sm" placeholder="First Name">
-              </div>
-            </div>
-            <div class="col-xs-6 col-sm-6 col-md-6">
-              <div class="form-group">
-                <input type="text" name="last_name" id="last_name" class="form-control input-sm" placeholder="Last Name">
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <input type="email" name="email" id="email" class="form-control input-sm" placeholder="Email Address">
-          </div>
-
-          <div class="row">
-            <div class="col-xs-6 col-sm-6 col-md-6">
-              <div class="form-group">
-                <input type="password" name="password" id="password" class="form-control input-sm" placeholder="Password">
-              </div>
-            </div>
-            <div class="col-xs-6 col-sm-6 col-md-6">
-              <div class="form-group">
-                <input type="password" name="password_confirmation" id="password_confirmation" class="form-control input-sm" placeholder="Confirm Password">
-              </div>
-            </div>
-          </div>
-          
-          <input type="submit" value="Register" class="btn btn-info btn-block">
-        
-        </form>
+  <div class="row-fluid clearfix">
+    <style>
+      .fa{
+        display:inline-block;
+        font-style:normal;
+        font-weight:normal;
+        line-height:1;
+        -webkit-font-smoothing:antialiased;
+        -moz-osx-font-smoothing:grayscale}
+      .fa-lg{
+        font-size:1.3333333333333333em;
+        line-height:.75em;
+        vertical-align:-15%}
+      .fa-facebook-square:before{content:"\f001"}
+      .fa-github-square:before{content:"\f002"}
+      .fa-twitter-square:before{content:"\f003"}
+    </style>
+    <div class="col-md-7 column">
+      <h1>Sign Up</h1>
+      <hr/>
+      <form role="form">
+        <div class="form-group">
+           <label for="email">Email address</label><input type="email" class="form-control" id="email" placeholder="email address"/>
+        </div>
+        <div class="form-group">
+           <label for="password">Password</label><input type="password" class="form-control" id="password" placeholder="password"/>
+        </div>
+        <div class="form-group">
+           <label for="password">Password</label><input type="password" class="form-control" id="password-conform" placeholder="password conform" />
+        </div>
+        <button type="submit" class="btn btn-primary" id='submit'>Submit</button>
+      </form>
+      <hr/>
+      <p>Or sign up using...</p>
+      <div class="form-actions">
+        <div class="btn-group btn-group-justified">
+          <a href="/login/twitter/" class="btn btn-info"><i class="fa fa-twitter-square fa-lg"></i> Twitter</a>
+          <a href="/login/github/" class="btn btn-info"><i class="fa fa-github-square fa-lg"></i> GitHub</a>
+          <a href="/login/facebook/" class="btn btn-info"><i class="fa fa-facebook-square fa-lg"></i> Facebook</a>
+        </div>
       </div>
     </div>
+    <div class="col-md-5 column">
+      <h1>Benefits</h1>
+      <hr/>
+      <p class="lead">some introduction</p>
+    </div>
   </div>
-</div>
+  <script type="text/javascript" charset="utf-8">
+    ;(function($){
+      if(!$.notify){
+        head.load("/bower/notifyjs/dist/notify.min.js");
+        head.load("/bower/notifyjs/dist/styles/bootstrap/notify-bootstrap.js");
+      }
+      
+      if(!window.SparkMD5){
+        console.log('load sparkmd5');
+        head.load("/bower/spark-md5/spark-md5.min.js");
+      }
+
+      function amd_notify(sel,info,level){
+        if($.notify){
+          $(sel).notify(info,level);
+        }else{
+          $('#login_hints').html(info);
+        }
+      }
+      $.event.special.inputchange = {
+          setup: function() {
+              var self = this, val;
+              $.data(this, 'timer', window.setInterval(function() {
+                  val = self.value;
+                  if ( $.data( self, 'cache') != val ) {
+                      $.data( self, 'cache', val );
+                      $( self ).trigger( 'inputchange' );
+                  }
+              }, 20));
+          },
+          teardown: function() {
+              window.clearInterval( $.data(this, 'timer') );
+          },
+          add: function() {
+              $.data(this, 'cache', this.value);
+          }
+      };
+
+      function validateEmail(email)
+      {
+        if(email.length == 0)
+        {
+          amd_notify("#email","email-address is required.","error");
+          return false;
+        }
+        var mailArray = email.split('@');
+        if(mailArray.length <= 1){
+          amd_notify("#email","Your email address must contain '@'.","error");
+        }else if(mailArray.length > 2){
+          amd_notify("#email","Your email address only can contain one '@'.","error");
+        }else
+        {
+          var idx = mailArray[1].indexOf('.');
+          if(idx < 1 || idx >= (mailArray[1].length - 1) )
+          {
+            amd_notify("#email","Your must using a valid domain name.","error");
+          }else{
+            return true;
+          }
+        }
+        return false;
+      }
+
+      function validatePassword(){
+        if($('#password').val() != $('#password-conform').val() )
+        {
+          amd_notify("#password","Password not matched.","error");
+          amd_notify("#password-conform","Password not matched.","error");
+          return false;
+        }
+        return true;
+      }
+
+      $('#email').change(function(){
+        validateEmail($(this).val());
+        console.log();
+      });
+      var first_password = true;
+      function validatePwdOnChange(){
+        if(first_password){
+          first_password = false;
+        }else{
+          validatePassword();
+        }
+      }
+      $('#password').change(validatePwdOnChange);
+      $('#password-conform').change(validatePwdOnChange);
+      $('#submit').on('click',function(e){
+        if(validateEmail($("#email").val()) && validatePassword())
+        {//signup to /d/signup
+            var passwd = $('#password').val();
+            console.log('md5("' + passwd + '")=' + SparkMD5.hash(passwd));
+/*          $.ajax({
+            type: "POST",
+            url: "/d/signup.js",
+            data: {
+              'email' : $('#email').val(),
+            }
+            success: function(data)
+            {
+                alert(data); // show response from the server.
+            }
+         });*/
+        }
+        return false;
+      });
+    })(jQuery);
+  </script>
