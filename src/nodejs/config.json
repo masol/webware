@@ -1,2 +1,9 @@
 
-
+{
+  "mail" : {
+    "host" : "smtp.spolo.org",
+    "user" : "noreply@spolo.org",
+    "pass" : "RlbcXXNY8T",
+    "from" : "Webware <noreply@spolo.org>"
+  }
+}

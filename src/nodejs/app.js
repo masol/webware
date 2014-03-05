@@ -20,12 +20,6 @@ function main(){
     "rewriter" : "/rewriter.js",
     "public" : path.normalize(__dirname + "/../www/"),
     "data" : path.normalize(__dirname + "/../../data/"),
-    "mail" : {
-      "host" : "smtp.spolo.org",
-      "user" : "noreply@spolo.org",
-      "pass" : "RlbcXXNY8T",
-      "from" : "Webware <noreply@spolo.org>"
-    }
   };
   
   //setup config:
@@ -37,16 +31,6 @@ function main(){
     utils.qs =  require('querystring');
     utils.mkdirp = require('mkdirp');
     utils.config = config;
-    var nodemailer = require("nodemailer");
-    utils.smtp = nodemailer.createTransport("SMTP",{
-      //service: "Gmail",
-      auth: {
-          user: config.mail.user,
-          pass: config.mail.pass
-      },
-      host :config.mail.host,
-      domains : ['spolo.org']
-    });
     utils.generatePassword = require('password-generator');
   }());
   
@@ -58,10 +42,21 @@ function main(){
     }
     try{
       config_obj = JSON.parse(data);
-      console.dir(config_obj);
+      //console.dir(config_obj);
       config = us.extend(config,config_obj);
       if(config.site.slice(-1) != '/')
         config.site += '/';
+      //continue config the smtp.
+      var nodemailer = require("nodemailer");
+      utils.smtp = nodemailer.createTransport("SMTP",{
+        //service: "Gmail",
+        auth: {
+            user: config.mail.user,
+            pass: config.mail.pass
+        },
+        host :config.mail.host,
+        domains : ['spolo.org']
+      });
     }catch(e)
     {
     }
