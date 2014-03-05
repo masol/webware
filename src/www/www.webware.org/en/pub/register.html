@@ -136,19 +136,21 @@
       $('#submit').on('click',function(e){
         if(validateEmail($("#email").val()) && validatePassword())
         {//signup to /d/signup
-            var passwd = $('#password').val();
-            console.log('md5("' + passwd + '")=' + SparkMD5.hash(passwd));
-/*          $.ajax({
+          var passwd = $('#password').val();
+          //console.log('md5("' + passwd + '")=' + SparkMD5.hash(passwd));
+          $.ajax({
             type: "POST",
             url: "/d/signup.js",
             data: {
               'email' : $('#email').val(),
-            }
+              'pass' : SparkMD5.hash(passwd)
+            },
             success: function(data)
             {
-                alert(data); // show response from the server.
+              console.log(data);
+              //alert(data); // show response from the server.
             }
-         });*/
+          }); //*/
         }
         return false;
       });

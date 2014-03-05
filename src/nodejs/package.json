@@ -11,7 +11,11 @@
   "dependencies": {
     "ws": "latest",
     "url": "latest",
-    "underscore": "latest"
+    "underscore": "latest",
+    "mkdirp": "latest",
+    "querystring": "latest",
+    "nodemailer": "latest",
+    "password-generator" : "latest"
   }
 }
 

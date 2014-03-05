@@ -14,12 +14,42 @@ function main(){
   var vm = require('vm');
   var path = require('path');
   var utils = require('./libs/utils.js');
-
+  
   var config = {
     "site" : __dirname + "/site/",
     "rewriter" : "/rewriter.js",
     "public" : path.normalize(__dirname + "/../www/"),
+    "data" : path.normalize(__dirname + "/../../data/"),
+    "mail" : {
+      "host" : "smtp.spolo.org",
+      "user" : "noreply@spolo.org",
+      "pass" : "RlbcXXNY8T",
+      "from" : "Webware <noreply@spolo.org>"
+    }
   };
+  
+  //setup config:
+  ;(function(){
+    utils.path = path;
+    utils.fs = fs;
+    utils.us = us;
+    utils.urlparser = urlparser;
+    utils.qs =  require('querystring');
+    utils.mkdirp = require('mkdirp');
+    utils.config = config;
+    var nodemailer = require("nodemailer");
+    utils.smtp = nodemailer.createTransport("SMTP",{
+      //service: "Gmail",
+      auth: {
+          user: config.mail.user,
+          pass: config.mail.pass
+      },
+      host :config.mail.host,
+      domains : ['spolo.org']
+    });
+    utils.generatePassword = require('password-generator');
+  }());
+  
 
   var config_file = __dirname + '/config.json';
   fs.readFile(config_file, 'utf8', function (err, data) {
@@ -74,11 +104,26 @@ function main(){
         if(us.isFunction(handler))
         {
           try{
-            var publicCache = config.public + req.headers['host'];
+            ///@deprecated plese using getPath and utils.fs to deal.
+            /* var publicCache = config.public + req.headers['host'];
             utils.readFile = function(virtualPath,callback){
               //console.log('enter readFile:' + publicCache);
               fs.readFile(publicCache + path.normalize(virtualPath), callback); 
-            };
+            }; //*/
+            utils.getPath = function(virtualPath,base){
+              if(!base) base = 'public';
+              var config_base = (base == 'user') ? 'data' : base;
+              var ret = config[config_base] + req.headers['host'];
+              if(base == 'user')
+              {
+                ret += '/users';
+              }
+
+              var p = path.normalize(virtualPath);
+              if(p.length && p[0] != '/')
+                ret += '/';
+              return ret + p;
+            }
             //console.log('call handler');
             handler(req,res,utils);
           }catch(e)
@@ -96,6 +141,7 @@ function main(){
       }
       
       function handler_loaded(err,content){
+        //console.log(content);
         if(err){
           http_handler[handler_fullpath] = true;
         }else{
@@ -127,6 +173,7 @@ function main(){
         if(urlobj && urlobj.pathname)
         {
           handler_fullpath = config.site + req.headers['host'] + path.normalize(urlobj.pathname);
+          //console.log(handler_fullpath);
           if(!http_handler[handler_fullpath])
           {//load handler from the fullpath.
             fs.readFile(handler_fullpath, 'utf8',handler_loaded);
